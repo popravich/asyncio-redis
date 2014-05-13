@@ -43,6 +43,7 @@ import os
 
 PORT = int(os.environ.get('REDIS_PORT', 6379))
 HOST = os.environ.get('REDIS_HOST', 'localhost')
+UNIXSOCK = os.environ.get('REDIS_SOCKET', './asyncio-redis-tests.sock')
 
 
 @asyncio.coroutine
@@ -2127,7 +2128,7 @@ class RedisProtocolUnixsocketTest(RedisProtocolTest):
             asyncio.create_subprocess_exec(
                 'redis-server',
                 '--port', '0',
-                '--unixsocket', './asyncio-redis-tests.sock',
+                '--unixsocket', UNIXSOCK,
                 '--maxclients', '100',
                 '--save', '""',
                 '--loglevel', 'warning',
@@ -2143,7 +2144,7 @@ class RedisProtocolUnixsocketTest(RedisProtocolTest):
 
     def setUp(self):
         super().setUp()
-        self.unixsocket = './asyncio-redis-tests.sock'
+        self.unixsocket = UNIXSOCK
 
 
 class RedisBytesWithoutGlobalEventloopProtocolTest(RedisBytesProtocolTest):
