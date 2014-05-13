@@ -46,8 +46,13 @@ HOST = os.environ.get('REDIS_HOST', 'localhost')
 
 
 @asyncio.coroutine
-def connect(loop, protocol=RedisProtocol):
-    transport, protocol = yield from loop.create_connection(lambda: protocol(loop=loop), HOST, PORT)
+def connect(loop, protocol=RedisProtocol, unixsocket=None):
+    if unixsocket is not None:
+        transport, protocol = yield from loop.create_unix_connection(
+            lambda: protocol(loop=loop), unixsocket)
+    else:
+        transport, protocol = yield from loop.create_connection(
+            lambda: protocol(loop=loop), HOST, PORT)
     return transport, protocol
 
 
@@ -63,7 +68,8 @@ def redis_test(function):
         @asyncio.coroutine
         def c():
             # Create connection
-            transport, protocol = yield from connect(self.loop, self.protocol_class)
+            transport, protocol = yield from connect(self.loop,
+                self.protocol_class, unixsocket=self.unixsocket)
 
             # Run test
             yield from function(self, transport, protocol)
@@ -80,6 +86,7 @@ class RedisProtocolTest(unittest.TestCase):
         #self.loop = test_utils.TestLoop()
         self.loop = asyncio.get_event_loop()
         self.protocol_class = RedisProtocol
+        self.unixsocket = None
 
     def tearDown(self):
         #self.loop.close()
@@ -537,7 +544,7 @@ class RedisProtocolTest(unittest.TestCase):
             test_order.append('#3')
         f = asyncio.async(blpop(), loop=self.loop)
 
-        transport2, protocol2 = yield from connect(self.loop)
+        transport2, protocol2 = yield from connect(self.loop, unixsocket=self.unixsocket)
 
         test_order.append('#2')
         yield from protocol2.rpush(u'my_list', [u'value'])
@@ -568,7 +575,7 @@ class RedisProtocolTest(unittest.TestCase):
             self.assertEqual(result, u'my_value')
         f = asyncio.async(brpoplpush(), loop=self.loop)
 
-        transport2, protocol2 = yield from connect(self.loop)
+        transport2, protocol2 = yield from connect(self.loop, unixsocket=self.unixsocket)
         yield from protocol2.rpush(u'from', [u'my_value'])
         yield from f
 
@@ -782,7 +789,7 @@ class RedisProtocolTest(unittest.TestCase):
         @asyncio.coroutine
         def listener():
             # Subscribe
-            transport2, protocol2 = yield from connect(self.loop)
+            transport2, protocol2 = yield from connect(self.loop, unixsocket=self.unixsocket)
 
             self.assertEqual(protocol2.in_pubsub, False)
             subscription = yield from protocol2.start_subscribe()
@@ -848,7 +855,7 @@ class RedisProtocolTest(unittest.TestCase):
         @asyncio.coroutine
         def listener():
             # Subscribe
-            transport2, protocol2 = yield from connect(self.loop)
+            transport2, protocol2 = yield from connect(self.loop, unixsocket=self.unixsocket)
 
             self.assertEqual(protocol2.in_pubsub, False)
             subscription = yield from protocol2.start_subscribe()
@@ -943,7 +950,7 @@ class RedisProtocolTest(unittest.TestCase):
         self.assertEqual(result, 3)
 
             # Check result using bytes protocol
-        bytes_transport, bytes_protocol = yield from connect(self.loop, lambda **kw: RedisProtocol(encoder=BytesEncoder(), **kw))
+        bytes_transport, bytes_protocol = yield from connect(self.loop, lambda **kw: RedisProtocol(encoder=BytesEncoder(), **kw), unixsocket=self.unixsocket)
         result = yield from bytes_protocol.get(b'result')
         self.assertIsInstance(result, bytes)
         self.assertEqual(result, bytes((~a % 256, ~a % 256, ~a % 256)))
@@ -1332,7 +1339,7 @@ class RedisProtocolTest(unittest.TestCase):
                 i = i + 1
             end
             """
-            transport, protocol = yield from connect(self.loop, RedisProtocol)
+            transport, protocol = yield from connect(self.loop, RedisProtocol, unixsocket=self.unixsocket)
 
             script = yield from protocol.register_script(code)
             with self.assertRaises(ScriptKilledError):
@@ -1449,7 +1456,7 @@ class RedisProtocolTest(unittest.TestCase):
         self.assertIsInstance(result, StatusReply)
 
         # Try connecting through new Protocol instance.
-        transport2, protocol2 = yield from connect(self.loop, lambda **kw: RedisProtocol(password='newpassword', **kw))
+        transport2, protocol2 = yield from connect(self.loop, lambda **kw: RedisProtocol(password='newpassword', **kw), unixsocket=self.unixsocket)
         result = yield from protocol2.set('my-key', 'value')
         self.assertIsInstance(result, StatusReply)
 
@@ -1682,6 +1689,7 @@ class RedisBytesProtocolTest(unittest.TestCase):
     def setUp(self):
         self.loop = asyncio.get_event_loop()
         self.protocol_class = lambda **kw: RedisProtocol(encoder=BytesEncoder(), **kw)
+        self.unixsocket = None
 
     @redis_test
     def test_bytes_protocol(self, transport, protocol):
@@ -1721,13 +1729,15 @@ class RedisConnectionTest(unittest.TestCase):
     """ Test connection class. """
     def setUp(self):
         self.loop = asyncio.get_event_loop()
+        self.unixsocket = None
 
     def test_connection(self):
         @asyncio.coroutine
         def test():
             # Create connection
             connection = yield from Connection.create(host=HOST, port=PORT)
-            self.assertEqual(repr(connection), "Connection(host=%r, port=%r)" % (HOST, PORT))
+            self.assertEqual(repr(connection),
+                "Connection(host=%r, port=%r, unixsocket=%r)" % (HOST, PORT, self.unixsocket))
 
             # Test get/set
             yield from connection.set('key', 'value')
@@ -1741,6 +1751,7 @@ class RedisPoolTest(unittest.TestCase):
     """ Test connection pooling. """
     def setUp(self):
         self.loop = asyncio.get_event_loop()
+        self.unixsocket = None
 
     def test_pool(self):
         """ Test creation of Connection instance. """
@@ -2005,7 +2016,7 @@ class RedisPoolTest(unittest.TestCase):
         @asyncio.coroutine
         def test():
             # Create connection
-            transport, protocol = yield from connect(self.loop, RedisProtocol)
+            transport, protocol = yield from connect(self.loop, RedisProtocol, unixsocket=self.unixsocket)
             yield from protocol.set('key', 'value')
 
             # Close transport
@@ -2085,6 +2096,12 @@ class RedisProtocolWithoutGlobalEventloopTest(RedisProtocolTest):
     def tearDown(self):
         asyncio.set_event_loop(self._old_loop)
 
+
+class RedisProtocolUnixsocketTest(RedisProtocolTest):
+
+    def setUp(self):
+        super().setUp()
+        self.unixsocket = './redis/redis.sock'
 
 class RedisBytesWithoutGlobalEventloopProtocolTest(RedisBytesProtocolTest):
     """ Run all the tests from `RedisBytesProtocolTest`` again without a global event loop. """
