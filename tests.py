@@ -76,6 +76,7 @@ def redis_test(function):
 
             # Close connection
             transport.close()
+            yield from asyncio.sleep(.05, loop=self.loop)
 
         self.loop.run_until_complete(c())
     return wrapper
@@ -2099,9 +2100,31 @@ class RedisProtocolWithoutGlobalEventloopTest(RedisProtocolTest):
 
 class RedisProtocolUnixsocketTest(RedisProtocolTest):
 
+    @classmethod
+    def setUpClass(cls):
+        loop = asyncio.get_event_loop()
+        cls.redis_srv = loop.run_until_complete(
+            asyncio.create_subprocess_exec(
+                'redis-server',
+                '--port', '0',
+                '--unixsocket', './asyncio-redis-tests.sock',
+                '--maxclients', '100',
+                '--save', '""',
+                '--loglevel', 'warning',
+                loop=loop))
+        loop.run_until_complete(asyncio.sleep(.05, loop=loop))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.redis_srv.terminate()
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(cls.redis_srv.wait())
+        loop.run_until_complete(asyncio.sleep(.05, loop=loop))
+
     def setUp(self):
         super().setUp()
-        self.unixsocket = './redis/redis.sock'
+        self.unixsocket = './asyncio-redis-tests.sock'
+
 
 class RedisBytesWithoutGlobalEventloopProtocolTest(RedisBytesProtocolTest):
     """ Run all the tests from `RedisBytesProtocolTest`` again without a global event loop. """
