@@ -43,7 +43,7 @@ import os
 
 PORT = int(os.environ.get('REDIS_PORT', 6379))
 HOST = os.environ.get('REDIS_HOST', 'localhost')
-UNIXSOCK = os.environ.get('REDIS_SOCKET', './asyncio-redis-tests.sock')
+UNIXSOCKET = os.environ.get('REDIS_SOCKET', './asyncio-redis-tests.sock')
 
 
 @asyncio.coroutine
@@ -83,15 +83,21 @@ def redis_test(function):
     return wrapper
 
 
-class RedisProtocolTest(unittest.TestCase):
+class TestCase(unittest.TestCase):
+    unixsocket = None
+
     def setUp(self):
-        #self.loop = test_utils.TestLoop()
         self.loop = asyncio.new_event_loop()
-        self.protocol_class = RedisProtocol
-        self.unixsocket = None
 
     def tearDown(self):
         self.loop.close()
+
+
+class RedisProtocolTest(TestCase):
+
+    def setUp(self):
+        super().setUp()
+        self.protocol_class = RedisProtocol
 
     @redis_test
     def test_ping(self, transport, protocol):
@@ -1703,15 +1709,11 @@ class RedisProtocolTest(unittest.TestCase):
         result = yield from protocol.set('key', 'value')
 
 
-class RedisBytesProtocolTest(unittest.TestCase):
+class RedisBytesProtocolTest(TestCase):
 
     def setUp(self):
-        self.loop = asyncio.new_event_loop()
+        super().setUp()
         self.protocol_class = lambda **kw: RedisProtocol(encoder=BytesEncoder(), **kw)
-        self.unixsocket = None
-
-    def tearDown(self):
-        self.loop.close()
 
     @redis_test
     def test_bytes_protocol(self, transport, protocol):
@@ -1753,11 +1755,8 @@ class NoTypeCheckingTest(unittest.TestCase):
         asyncio.set_event_loop(old_loop)
 
 
-class RedisConnectionTest(unittest.TestCase):
+class RedisConnectionTest(TestCase):
     """ Test connection class. """
-    def setUp(self):
-        self.loop = asyncio.new_event_loop()
-        self.unixsocket = None
 
     def test_connection(self):
         @asyncio.coroutine
@@ -1777,15 +1776,8 @@ class RedisConnectionTest(unittest.TestCase):
         self.loop.run_until_complete(test())
 
 
-class RedisPoolTest(unittest.TestCase):
+class RedisPoolTest(TestCase):
     """ Test connection pooling. """
-
-    def setUp(self):
-        self.loop = asyncio.new_event_loop()
-        self.unixsocket = None
-
-    def tearDown(self):
-        self.loop.close()
 
     def _close_pool(self, pool):
         asyncio.sleep(.05, loop=self.loop)
@@ -2196,11 +2188,9 @@ class RedisProtocolWithoutGlobalEventloopTest(RedisProtocolTest):
         asyncio.set_event_loop(None)
         self.loop = asyncio.new_event_loop()
 
-    def tearDown(self):
-        self.loop.close()
-
 
 class RedisProtocolUnixsocketTest(RedisProtocolTest):
+    unixsocket = UNIXSOCKET
 
     @classmethod
     def setUpClass(cls):
@@ -2209,7 +2199,7 @@ class RedisProtocolUnixsocketTest(RedisProtocolTest):
             asyncio.create_subprocess_exec(
                 'redis-server',
                 '--port', '0',
-                '--unixsocket', UNIXSOCK,
+                '--unixsocket', cls.unixsocket,
                 '--maxclients', '100',
                 '--save', '""',
                 '--loglevel', 'warning',
@@ -2222,13 +2212,10 @@ class RedisProtocolUnixsocketTest(RedisProtocolTest):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(cls.redis_srv.wait())
         loop.run_until_complete(asyncio.sleep(.05, loop=loop))
-
-    def setUp(self):
-        super().setUp()
-        self.unixsocket = UNIXSOCK
 
 
 class RedisPoolUnixsocketTest(RedisPoolTest):
+    unixsocket = UNIXSOCKET
 
     @classmethod
     def setUpClass(cls):
@@ -2237,7 +2224,7 @@ class RedisPoolUnixsocketTest(RedisPoolTest):
             asyncio.create_subprocess_exec(
                 'redis-server',
                 '--port', '0',
-                '--unixsocket', UNIXSOCK,
+                '--unixsocket', cls.unixsocket,
                 '--maxclients', '100',
                 '--save', '""',
                 '--loglevel', 'warning',
@@ -2250,10 +2237,6 @@ class RedisPoolUnixsocketTest(RedisPoolTest):
         loop = asyncio.get_event_loop()
         loop.run_until_complete(cls.redis_srv.wait())
         loop.run_until_complete(asyncio.sleep(.05, loop=loop))
-
-    def setUp(self):
-        super().setUp()
-        self.unixsocket = UNIXSOCK
 
 
 class RedisBytesWithoutGlobalEventloopProtocolTest(RedisBytesProtocolTest):
@@ -2267,6 +2250,7 @@ class RedisBytesWithoutGlobalEventloopProtocolTest(RedisBytesProtocolTest):
         self.loop = asyncio.new_event_loop()
 
     def tearDown(self):
+        super().tearDown()
         asyncio.set_event_loop(self._old_loop)
 
 
