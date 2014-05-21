@@ -43,7 +43,7 @@ import os
 
 PORT = int(os.environ.get('REDIS_PORT', 6379))
 HOST = os.environ.get('REDIS_HOST', 'localhost')
-UNIXSOCKET = os.environ.get('REDIS_SOCKET', './asyncio-redis-tests.sock')
+UNIXSOCKET = os.environ.get('REDIS_SOCKET', '/tmp/asyncio-redis-tests.sock')
 
 
 @asyncio.coroutine
