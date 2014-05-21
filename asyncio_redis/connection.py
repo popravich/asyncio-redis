@@ -39,6 +39,9 @@ class Connection:
         :type unixsocket: str
         :param loop: (optional) asyncio event loop.
         """
+        assert not (port and unixsocket), (
+            "Either port or unixsocket must be set, not both",
+            port, unixsocket)
         connection = cls()
 
         connection.host = host
@@ -85,7 +88,7 @@ class Connection:
         while True:
             try:
                 logger.log(logging.INFO, 'Connecting to redis')
-                if self.unixsocket is None:
+                if self.port:
                     yield from self._loop.create_connection(lambda: self.protocol, self.host, self.port)
                 else:
                     yield from self._loop.create_unix_connection(lambda: self.protocol, self.unixsocket)
