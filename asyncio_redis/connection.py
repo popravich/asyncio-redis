@@ -21,11 +21,11 @@ class Connection:
     @classmethod
     @asyncio.coroutine
     def create(cls, host='localhost', port=6379, password=None, db=0,
-               encoder=None, auto_reconnect=True, unixsocket=None, loop=None):
+               encoder=None, auto_reconnect=True, loop=None):
         """
-        :param host: Address
+        :param host: Address, either host or unix domain socket path
         :type host: str
-        :param port: TCP port.
+        :param port: TCP port. If port is 0 then host assumed to be unix socket path
         :type port: int
         :param password: Redis database password
         :type password: bytes
@@ -35,18 +35,13 @@ class Connection:
         :type encoder: :class:`asyncio_redis.encoders.BaseEncoder` instance.
         :param auto_reconnect: Enable auto reconnect
         :type auto_reconnect: bool
-        :param unixsocket: Unix socket path
-        :type unixsocket: str
         :param loop: (optional) asyncio event loop.
         """
-        assert not (port and unixsocket), (
-            "Either port or unixsocket must be set, not both",
-            port, unixsocket)
+        assert port >= 0, ("Unexpected port value", port)
         connection = cls()
 
         connection.host = host
         connection.port = port
-        connection.unixsocket = unixsocket
         connection._loop = loop or asyncio.get_event_loop()
         connection._retry_interval = .5
 
@@ -91,7 +86,7 @@ class Connection:
                 if self.port:
                     yield from self._loop.create_connection(lambda: self.protocol, self.host, self.port)
                 else:
-                    yield from self._loop.create_unix_connection(lambda: self.protocol, self.unixsocket)
+                    yield from self._loop.create_unix_connection(lambda: self.protocol, self.host)
                 self._reset_retry_interval()
                 return
             except OSError:
@@ -109,5 +104,4 @@ class Connection:
         return getattr(self.protocol, name)
 
     def __repr__(self):
-        return 'Connection(host=%r, port=%r, unixsocket=%r)' % (
-            self.host, self.port, self.unixsocket)
+        return 'Connection(host=%r, port=%r)' % (self.host, self.port)
