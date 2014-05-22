@@ -37,7 +37,7 @@ class Connection:
         :type auto_reconnect: bool
         :param loop: (optional) asyncio event loop.
         """
-        assert port >= 0, ("Unexpected port value", port)
+        assert port >= 0, ("Unexpected port value", (host, port))
         connection = cls()
 
         connection.host = host
