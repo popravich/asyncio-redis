@@ -13,5 +13,9 @@ before_install:
 install:
   - "pip install . --use-mirrors"
 
-script:
-  - REDIS_PORT=6379 ./tests.py
+script: ./tests.py
+
+env:
+  matrix:
+  - "REDIS_PORT=6380"
+  - "REDIS_PORT=0 REDIS_HOST=/tmp/asyncio"
