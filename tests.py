@@ -2217,5 +2217,5 @@ if __name__ == '__main__':
     finally:
         if PORT != 6379:
             redis_srv.terminate()
-            loop.run_until_complete(redis_srv.wait())
-            loop.run_until_complete(asyncio.sleep(.05, loop=loop))
+            # loop.run_until_complete(redis_srv.wait())
+            # loop.run_until_complete(asyncio.sleep(.05, loop=loop))
